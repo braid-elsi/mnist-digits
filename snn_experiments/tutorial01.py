@@ -8,7 +8,9 @@ from snntorch import utils
 import torch
 from torchvision import datasets, transforms
 from torch.utils.data import DataLoader
-
+from snntorch import spikegen
+import matplotlib.pyplot as plt
+import snntorch.spikeplot as splt
 
 '''
 1. Training Parameters
@@ -119,8 +121,6 @@ def output_spike_videos(spike_data, num_digits=10):
     # print(spike_data[0])
 
     # let's take a look at what a "spike version of an image might look like..."
-    import matplotlib.pyplot as plt
-    import snntorch.spikeplot as splt
 
     for i in range(num_digits):
         spike_data_sample = spike_data[:, i, 0]
@@ -132,10 +132,10 @@ def output_spike_videos(spike_data, num_digits=10):
         anim = splt.animator(spike_data_sample, fig, ax, interval=40)
         movie_path = f'snn_experiments/figures/rate_encoded_demo_{i}.m4a'
         anim.save(movie_path)
-        print('open', movie_path, 'in QuickTime to view anumation')
+        print('open', movie_path, 'in QuickTime to view animation')
     #help(anim)
 
-from snntorch import spikegen
+
 
 # Iterate through minibatches (recall, each minibatch has 128 images)
 data = iter(train_loader)
@@ -145,12 +145,60 @@ pixel_maps_it, labels_it = next(data)
 output_bitmap(pixel_maps_it, labels_it, num_digits=5, delimiter="|")
 
 # Convert to spiking data using snntorch's spikegen function:
-spike_data = spikegen.rate(pixel_maps_it, num_steps=num_steps)
+
+# spike_data = spikegen.rate(pixel_maps_it, num_steps=num_steps)
+# Now, reduce spiking frequency to 25%.
+spike_data = spikegen.rate(pixel_maps_it, num_steps=num_steps, gain=0.25)
 
 # make spike videos:
 print('generating videos...')
-output_spike_videos(spike_data, num_digits=5,)
+output_spike_videos(spike_data, num_digits=1,)
 
+
+# reconstruct the plot from the spikes
+spike_data = spikegen.rate(pixel_maps_it, num_steps=num_steps)
+spike_data_sample = spike_data[:, 0, 0]
+plt.figure(facecolor="w")
+plt.subplot(1,2,1)
+plt.imshow(spike_data_sample.mean(axis=0).reshape((28,-1)).cpu(), cmap='binary')
+plt.axis('off')
+plt.title('Gain = 1')
+
+spike_data = spikegen.rate(pixel_maps_it, num_steps=num_steps, gain=0.25)
+spike_data_sample = spike_data[:, 0, 0]
+plt.subplot(1,2,2)
+plt.imshow(spike_data_sample.mean(axis=0).reshape((28,-1)).cpu(), cmap='binary')
+plt.axis('off')
+plt.title('Gain = 0.25')
+
+plt.show()
+
+
+# You can also visualize your image's spike trains as a time series plot!
+spike_data_sample2 = spike_data_sample.reshape((num_steps, -1))
+
+# raster plot
+fig = plt.figure(facecolor="w", figsize=(10, 5))
+ax = fig.add_subplot(111)
+splt.raster(spike_data_sample2, ax, s=1.5, c="black")
+
+plt.title("Input Layer")
+plt.xlabel("Time step")
+plt.ylabel("Neuron Number")
+plt.show()
+
+# visualize a single neuron (pixel)
+idx = 210  # index into 210th neuron
+
+fig = plt.figure(facecolor="w", figsize=(8, 1))
+ax = fig.add_subplot(111)
+
+splt.raster(spike_data_sample.reshape(num_steps, -1)[:, idx].unsqueeze(1), ax, s=100, c="black", marker="|")
+
+plt.title("Input Neuron")
+plt.xlabel("Time step")
+plt.yticks([])
+plt.show()
 
 
 '''
